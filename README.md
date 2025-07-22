@@ -1,20 +1,30 @@
-1. Run server :
-- Go to the /server folder
-- run :
-´´´
-./server -port=9000 (It can happen that the port for vless/vmess are blocking -> Just change the initial port)
-´´´
-</br>
+## 1. Run the Server
 
+- Navigate to the `/server` folder  
+- Run the following command:
 
-2. Copy past the server-credentials.json file to the /client folder (erase previous credentials folder if already exist)
-</br>
+```bash
+./server -port=9000
+```
 
+*Note: If the port is blocked (commonly by VLESS/VMess), simply change the port number.*
 
-3. Run the client :
-- In the /client folder
-- run :
-´´´
+---
+
+## 2. Prepare the Client
+
+- Copy the `server-credentials.json` file into the `/client` folder  
+- If a `credentials` folder already exists, delete or replace it
+
+---
+
+## 3. Run the Client
+
+- Navigate to the `/client` folder  
+- Run the following command:
+
+```bash
 ./client -test-all -host=127.0.0.1 -port=9000 -credentials=server-credentials.json
-´´´
-NOTE : The port must be the port of the server 
+```
+
+*Note : Make sure the port matches the one used when starting the server.*
