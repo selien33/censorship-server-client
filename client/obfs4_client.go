@@ -3,12 +3,13 @@ package main
 import (
     "fmt"
     "io"
-    "net"
     "time"
 
     "gitlab.com/yawning/obfs4.git/transports"
+    "gitlab.com/yawning/obfs4.git/transports/base"
     _ "gitlab.com/yawning/obfs4.git/transports/obfs4"
     pt "gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib"
+    "golang.org/x/net/proxy"
 )
 
 func RunObfs4Test(addr string, config *TestConfig) TestResult {
@@ -43,24 +44,30 @@ func RunObfs4Test(addr string, config *TestConfig) TestResult {
         return result
     }
 
-    ptArgs := &pt.Args{}
-    ptArgs.Add("cert", config.Obfs4Config.Certificate)
-    ptArgs.Add("iat-mode", fmt.Sprintf("%d", config.Obfs4Config.IATMode))
-
-    rawConn, err := net.DialTimeout("tcp", addr, config.Timeout)
-    if err != nil {
-        result.Error = fmt.Sprintf("DialTimeout failed: %v", err)
+    clientFactory, ok := factory.(base.ClientFactory)
+    if !ok {
+        result.Error = "Failed to cast to ClientFactory"
         result.Duration = time.Since(startTime)
-        LogConnection("OBFS4", addr, false, time.Since(startTime), err)
         return result
     }
 
-    conn, err := factory.Dial("tcp", addr, func(_, _ string) (net.Conn, error) {
-        return rawConn, nil
-    }, ptArgs)
+    ptArgs := pt.Args{}
+    ptArgs.Add("cert", config.Obfs4Config.Certificate)
+    ptArgs.Add("iat-mode", fmt.Sprintf("%d", config.Obfs4Config.IATMode))
+
+    // Parse args to get the transport-specific format !!!
+    parsedArgs, err := clientFactory.ParseArgs(&ptArgs)
     if err != nil {
-        result.Error = fmt.Sprintf("Dial (wrapped) failed: %v", err)
+        result.Error = fmt.Sprintf("ParseArgs failed: %v", err)
         result.Duration = time.Since(startTime)
+        return result
+    }
+
+    conn, err := clientFactory.Dial("tcp", addr, proxy.Direct.Dial, parsedArgs)
+    if err != nil {
+        result.Error = fmt.Sprintf("Dial failed: %v", err)
+        result.Duration = time.Since(startTime)
+        LogConnection("OBFS4", addr, false, time.Since(startTime), err)
         return result
     }
     defer conn.Close()

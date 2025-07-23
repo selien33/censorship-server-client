@@ -1,21 +1,26 @@
 package main
 
 import (
+    "bufio"
     "crypto/rand"
     "crypto/rsa"
     "crypto/x509"
     "crypto/x509/pkix"
     "encoding/base64"
+    "encoding/hex"
     "encoding/json"
     "fmt"
+    "io/ioutil"
     "math/big"
     mathRand "math/rand"
     "net"
     "os"
+    "regexp"
     "strings"
     "time"
     
     "github.com/google/uuid"
+    "gitlab.com/yawning/obfs4.git/common/ntor"
 )
 
 type ServerCredentials struct {
@@ -31,6 +36,21 @@ type ProtocolCredential struct {
     Credentials map[string]string `json:"credentials"`
 }
 
+// Obfs4ServerState represents the server's persistent state
+type Obfs4ServerState struct {
+    NodeID     string `json:"node-id"`
+    PrivateKey string `json:"private-key"`
+    PublicKey  string `json:"public-key"`
+    DrbgSeed   string `json:"drbg-seed"`
+    IATMode    int    `json:"iat-mode"`
+}
+
+// Obfs4BridgeInfo represents the parsed bridge line information
+type Obfs4BridgeInfo struct {
+    Certificate string
+    IATMode     int
+}
+
 // Generate all server credentials
 func GenerateCredentials(host string, basePort int, protocols []string) (*ServerCredentials, error) {
     creds := &ServerCredentials{
@@ -42,8 +62,15 @@ func GenerateCredentials(host string, basePort int, protocols []string) (*Server
     
     // Pre-generate common credentials
     shadowsocksPassword := generateSecurePassword(16)
-    obfs4NodeID, obfs4PublicKey, obfs4PrivateKey, _ := generateObfs4Keys()
-    obfs4Certificate := generateObfs4Certificate(obfs4NodeID, obfs4PublicKey)
+    
+    // Read certificate from bridgeline.txt -> done when server is started (in obfs4.go)
+    var obfs4Certificate string
+    var obfs4IATMode int
+
+    // Dummy values for now
+    obfs4Certificate = ""
+    obfs4IATMode = -1
+    
     
     for i, protocol := range protocols {
         port := basePort + i
@@ -54,11 +81,8 @@ func GenerateCredentials(host string, basePort int, protocols []string) (*Server
                 Protocol: protocol,
                 Port:     port,
                 Credentials: map[string]string{
-                    "node_id":     obfs4NodeID,
-                    "public_key":  obfs4PublicKey,
-                    "private_key": obfs4PrivateKey,
                     "certificate": obfs4Certificate,
-                    "iat_mode":    "0",
+                    "iat_mode":    fmt.Sprintf("%d", obfs4IATMode),
                 },
             }
             
@@ -129,9 +153,78 @@ func GenerateCredentials(host string, basePort int, protocols []string) (*Server
     return creds, nil
 }
 
+// Read obfs4 certificate from bridgeline.txt file
+func readObfs4BridgeLine(bridgelineFile string) (*Obfs4BridgeInfo, error) {
+    fmt.Printf("DEBUG: Attempting to read file: %s\n", bridgelineFile)
+    
+    file, err := os.Open(bridgelineFile)
+    if err != nil {
+        return nil, fmt.Errorf("failed to open bridgeline file: %v", err)
+    }
+    defer file.Close()
+
+    scanner := bufio.NewScanner(file)
+    
+    // Regular expression to match the bridge line
+    // Bridge obfs4 <IP ADDRESS>:<PORT> <FINGERPRINT> cert=<CERTIFICATE> iat-mode=<MODE>
+    // Need to handle placeholders like <IP ADDRESS>:<PORT> and <FINGERPRINT> which contain spaces
+    bridgeLineRegex := regexp.MustCompile(`Bridge\s+obfs4\s+(.+?)\s+(.+?)\s+cert=([A-Za-z0-9+/=]+)\s+iat-mode=(\d+)`)
+    
+    lineNum := 0
+    for scanner.Scan() {
+        lineNum++
+        line := strings.TrimSpace(scanner.Text())
+        fmt.Printf("DEBUG: Line %d: '%s'\n", lineNum, line)
+        
+        // Skip comments and empty lines
+        if strings.HasPrefix(line, "#") || line == "" {
+            fmt.Printf("DEBUG: Skipping line %d (comment or empty)\n", lineNum)
+            continue
+        }
+        
+        // Check if this is a bridge line
+        fmt.Printf("DEBUG: Testing line %d against regex\n", lineNum)
+        if matches := bridgeLineRegex.FindStringSubmatch(line); matches != nil {
+            fmt.Printf("DEBUG: Regex matched! Found %d groups\n", len(matches))
+            for i, match := range matches {
+                fmt.Printf("DEBUG: Group %d: '%s'\n", i, match)
+            }
+            
+            // matches[1] = IP:PORT, matches[2] = FINGERPRINT, matches[3] = CERTIFICATE, matches[4] = IAT-MODE
+            certificate := matches[3]
+            iatMode := 0
+            if len(matches) > 4 {
+                if _, err := fmt.Sscanf(matches[4], "%d", &iatMode); err != nil {
+                    iatMode = 0
+                }
+            }
+            
+            fmt.Printf("DEBUG: Extracted certificate: '%s' (length: %d)\n", certificate, len(certificate))
+            fmt.Printf("DEBUG: Extracted IAT mode: %d\n", iatMode)
+            
+            return &Obfs4BridgeInfo{
+                Certificate: certificate,
+                IATMode:     iatMode,
+            }, nil
+        } else {
+            fmt.Printf("DEBUG: Line %d did not match bridge regex\n", lineNum)
+        }
+    }
+    
+    if err := scanner.Err(); err != nil {
+        return nil, fmt.Errorf("error reading bridgeline file: %v", err)
+    }
+    
+    return nil, fmt.Errorf("no valid bridge line found in %s", bridgelineFile)
+}
+
 // Save credentials to files
 func SaveCredentials(creds *ServerCredentials) error {
-   
+    // Debug: Check what we're about to save
+    if obfs4Creds, exists := creds.Protocols["obfs4"]; exists {
+        fmt.Printf("DEBUG: About to save obfs4 certificate: '%s'\n", obfs4Creds.Credentials["certificate"])
+    }
+    
     // Save JSON
     jsonFile := fmt.Sprintf("server-credentials.json")
     jsonData, err := json.MarshalIndent(creds, "", "  ")
@@ -272,35 +365,64 @@ func generateSecurePassword(length int) string {
     return string(password)
 }
 
-func generateObfs4Keys() (string, string, string, error) {
-    nodeID := make([]byte, 20)
-    publicKey := make([]byte, 32)
-    privateKey := make([]byte, 32)
-    
-    if _, err := rand.Read(nodeID); err != nil {
-        return "", "", "", err
-    }
-    if _, err := rand.Read(publicKey); err != nil {
-        return "", "", "", err
-    }
-    if _, err := rand.Read(privateKey); err != nil {
-        return "", "", "", err
-    }
-    
-    return base64.StdEncoding.EncodeToString(nodeID),
-           base64.StdEncoding.EncodeToString(publicKey),
-           base64.StdEncoding.EncodeToString(privateKey),
-           nil
-}
-
-func generateObfs4Certificate(nodeID, publicKey string) string {
-    certData := fmt.Sprintf("node-id=%s,public-key=%s", nodeID, publicKey)
-    return base64.StdEncoding.EncodeToString([]byte(certData))
-}
-
 func base64EncodeData(data []byte) string {
     if len(data) == 0 {
         return ""
     }
     return base64.StdEncoding.EncodeToString(data)
+}
+
+func loadOrCreateObfs4State(stateFile string) (*Obfs4ServerState, error) {
+    // Try to load existing state
+    if data, err := ioutil.ReadFile(stateFile); err == nil {
+        var state Obfs4ServerState
+        if err := json.Unmarshal(data, &state); err == nil {
+            return &state, nil
+        }
+    }
+
+    // Create new state
+    keypair, err := ntor.NewKeypair(true)
+    if err != nil {
+        return nil, err
+    }
+
+    // Generate random node ID (20 bytes)
+    nodeIDBytes := make([]byte, 20)
+    if _, err := rand.Read(nodeIDBytes); err != nil {
+        return nil, err
+    }
+    
+    nodeID, err := ntor.NewNodeID(nodeIDBytes)
+    if err != nil {
+        return nil, err
+    }
+
+    // DRBG seed is 24 bytes for obfs4
+    seed := make([]byte, 24)
+    if _, err := rand.Read(seed); err != nil {
+        return nil, err
+    }
+
+    state := &Obfs4ServerState{
+        NodeID:     hex.EncodeToString(nodeID[:]),
+        PrivateKey: hex.EncodeToString(keypair.Private().Bytes()[:]),
+        PublicKey:  hex.EncodeToString(keypair.Public().Bytes()[:]),
+        DrbgSeed:   hex.EncodeToString(seed),
+        IATMode:    0,
+    }
+
+    // Save state
+    data, err := json.MarshalIndent(state, "", "  ")
+    if err != nil {
+        return nil, err
+    }
+
+    fmt.Printf("\n\n\n %s \n\n\n\n", data)   
+
+    if err := ioutil.WriteFile(stateFile, data, 0600); err != nil {
+        return nil, err
+    }
+
+    return state, nil
 }

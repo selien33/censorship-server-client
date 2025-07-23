@@ -49,6 +49,12 @@ func main() {
     fmt.Printf("=== Censorship Measurement Multi-Protocol Server ===\n")
     fmt.Printf("Host: %s, Base Port: %d\n\n", *host, *basePort)
 
+    // Create logs directory if it doesn't exist
+    if err := os.MkdirAll("logs", 0755); err != nil {
+        fmt.Printf("Failed to create logs directory: %v\n", err)
+        return
+    }
+
     protocolList := parseProtocols(*protocols)
     
     if *showPorts {
@@ -206,7 +212,7 @@ func printServerStatus(servers []*ProtocolServer, host string, basePort int) {
                 DisplayClientConfig(server.Protocol, serverCredentials)
             }
         } else {
-            fmt.Printf("v %-15s: %s:%d [%s]", server.Protocol, host, server.Port, server.Status)
+            fmt.Printf("✗ %-15s: %s:%d [%s]", server.Protocol, host, server.Port, server.Status)
             if server.Error != nil {
                 fmt.Printf(" - %v", server.Error)
             }

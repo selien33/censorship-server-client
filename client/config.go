@@ -431,8 +431,6 @@ func getDefaultLogConfig() *LogConfig {
 // Generate test data with recognizable pattern
 func GenerateTestData(size int, header string) []byte {
     data := make([]byte, size)
-    
-    // Create a recognizable pattern for analysis
     copy(data, header)
     
     // Fill with pattern that can be easily identified
@@ -442,3 +440,4 @@ func GenerateTestData(size int, header string) []byte {
     
     return data
 }
+
