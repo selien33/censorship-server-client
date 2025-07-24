@@ -3,28 +3,21 @@ package main
 import (
     "encoding/json"
     "fmt"
-    "log"
     "os"
     "time"
-    "os/exec"
     "sync"
 )
 
 var (
-    detailedLogger *log.Logger
     logFile        *os.File
     logToTerminal  bool = true
-    captureEnabled bool = false
-    tcpdumpCmd     *exec.Cmd
-    pcapFilename   string
     logEvents      []map[string]interface{}
     logMutex       sync.Mutex
 )
 
-// Initialize logging and packet capture
-func InitLogging(protocol string, enableDetailed bool, terminal bool, enablePcap bool, targetAddr string) error {
+// Initialize logging
+func InitLogging(protocol string, enableDetailed bool, terminal bool) error {
     logToTerminal = terminal
-    captureEnabled = enablePcap
     logEvents = make([]map[string]interface{}, 0)
     
     timestamp := time.Now().Unix()
@@ -38,122 +31,13 @@ func InitLogging(protocol string, enableDetailed bool, terminal bool, enablePcap
             return fmt.Errorf("failed to open log file: %v", err)
         }
         
-        // Don't create detailedLogger yet -> will be writen at the end
         LogEvent("logging_initialized", map[string]interface{}{
             "protocol": protocol,
             "log_file": filename,
         })
     }
     
-    // Initialize packet capture
-    if enablePcap {
-        if err := StartPacketCapture(protocol, timestamp, targetAddr); err != nil {
-            fmt.Printf("Warning: Failed to start packet capture: %v\n", err)
-            captureEnabled = false
-        }
-    }
-    
     return nil
-}
-
-// Start packet capture using tcpdump
-func StartPacketCapture(protocol string, timestamp int64, targetAddr string) error {
-    pcapFilename = fmt.Sprintf("client-capture-%s-%d.pcap", protocol, timestamp)
-    
-    // Extract host from targetAddr
-    host := targetAddr
-    if idx := lastIndexByte(targetAddr, ':'); idx != -1 {
-        host = targetAddr[:idx]
-    }
-    
-    // Check if tcpdump is available
-    if _, err := exec.LookPath("tcpdump"); err != nil {
-        return fmt.Errorf("tcpdump not found in PATH: %v", err)
-    }
-    
-    // Build tcpdump command - more portable approach
-    args := []string{
-        "-i", "any",           
-        "-w", pcapFilename,
-        "-s", "0",
-        "-n",
-        "host", host,
-    }
-    
-    tcpdumpCmd = exec.Command("tcpdump", args...)
-    
-    // Start tcpdump in background
-    if err := tcpdumpCmd.Start(); err != nil {
-        return fmt.Errorf("failed to start tcpdump: %v (try running with sudo)", err)
-    }
-    
-    // Wait for tcpdump to start (arbitrary)
-    time.Sleep(100 * time.Millisecond)
-    
-    LogEvent("packet_capture_started", map[string]interface{}{
-        "pcap_file": pcapFilename,
-        "target":    targetAddr,
-        "filter":    fmt.Sprintf("host %s", host),
-        "pid":       tcpdumpCmd.Process.Pid,
-    })
-    
-    if logToTerminal {
-        fmt.Printf("✓ Packet capture started: %s (PID: %d)\n", pcapFilename, tcpdumpCmd.Process.Pid)
-    }
-    
-    return nil
-}
-
-// Stop packet capture
-func StopPacketCapture() {
-    if tcpdumpCmd != nil && tcpdumpCmd.Process != nil {
-        // Send SIGTERM to tcpdump to ensure proper pcap file closure
-        if err := tcpdumpCmd.Process.Signal(os.Interrupt); err != nil {
-            // If SIGTERM fails -> try SIGKILL
-            tcpdumpCmd.Process.Kill()
-        }
-        
-        // Wait for process to finish with timeout
-        done := make(chan error, 1)
-        go func() {
-            done <- tcpdumpCmd.Wait()
-        }()
-        
-        select {
-        case err := <-done:
-            if err != nil && logToTerminal {
-                fmt.Printf("tcpdump finished with error: %v\n", err)
-            }
-        case <-time.After(2 * time.Second):
-            // Force kill if it doesn't stop within 2 seconds
-            tcpdumpCmd.Process.Kill()
-            tcpdumpCmd.Wait()
-        }
-        
-        // Check if pcap file was created
-        if _, err := os.Stat(pcapFilename); err == nil {
-            LogEvent("packet_capture_stopped", map[string]interface{}{
-                "message":   "Packet capture completed",
-                "pcap_file": pcapFilename,
-                "file_created": true,
-            })
-            
-            if logToTerminal {
-                fmt.Printf("✓ Packet capture stopped - saved to: %s\n", pcapFilename)
-            }
-        } else {
-            LogEvent("packet_capture_stopped", map[string]interface{}{
-                "message":   "Packet capture completed but no file created",
-                "pcap_file": pcapFilename,
-                "file_created": false,
-                "error": err.Error(),
-            })
-            
-            if logToTerminal {
-                fmt.Printf("⚠ Packet capture stopped but no file created: %v\n", err)
-            }
-        }
-    }
 }
 
 // Generic event logger
@@ -308,7 +192,6 @@ func LogConfiguration(protocol string, config map[string]interface{}) {
         "config":   config,
     })
     
-    // TODO -> Think if really necessary not to log passworda to terminal ?!
     if logToTerminal {
         fmt.Printf("%s Configuration:\n", protocol)
         for key, value := range config {
@@ -326,8 +209,7 @@ func LogConfiguration(protocol string, config map[string]interface{}) {
 func shouldLogToTerminal(eventType string) bool {
     importantEvents := []string{
         "test_start", "test_complete", "connection_attempt", 
-        "data_transmission", "echo_verification", "packet_capture_started",
-        "packet_capture_stopped", "configuration",
+        "data_transmission", "echo_verification", "configuration",
     }
     
     for _, important := range importantEvents {
@@ -349,12 +231,8 @@ func formatEventForTerminal(data map[string]interface{}) string {
     return result
 }
 
-// Close logging and packet capture
+// Close logging
 func CloseLogging() {
-    if captureEnabled {
-        StopPacketCapture()
-    }
-    
     // Write all events as proper JSON array
     if logFile != nil {
         logMutex.Lock()
@@ -369,22 +247,4 @@ func CloseLogging() {
         
         logFile.Close()
     }
-}
-
-// Helper functions
-func base64EncodeData(data []byte) string {
-    if len(data) == 0 {
-        return ""
-    }
-    // Encode to base64 but import the package at the top
-    return "base64:" + fmt.Sprintf("%x", data) // Simple hex for now
-}
-
-func lastIndexByte(s string, c byte) int {
-    for i := len(s) - 1; i >= 0; i-- {
-        if s[i] == c {
-            return i
-        }
-    }
-    return -1
 }

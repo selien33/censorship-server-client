@@ -10,16 +10,15 @@ import (
 
 // TestConfig holds configuration for a test run
 type TestConfig struct {
-    Protocol      string            `yaml:"protocol" json:"protocol"`
-    Timeout       time.Duration     `yaml:"timeout" json:"timeout"`
-    DataSize      int               `yaml:"data_size" json:"data_size"`
-    Iterations    int               `yaml:"iterations" json:"iterations"`
-    PacketCapture bool              `yaml:"packet_capture" json:"packet_capture"`
-    Parameters    map[string]string `yaml:"parameters" json:"parameters"`
-    Obfs4Config   *Obfs4Config      `yaml:"obfs4_config,omitempty" json:"obfs4_config,omitempty"`
-    V2RayConfig   *V2RayConfig      `yaml:"v2ray_config,omitempty" json:"v2ray_config,omitempty"`
-    QUICConfig    *QUICConfig       `yaml:"quic_config,omitempty" json:"quic_config,omitempty"`
-    LogConfig     *LogConfig        `yaml:"log_config,omitempty" json:"log_config,omitempty"`
+    Protocol    string            `yaml:"protocol" json:"protocol"`
+    Timeout     time.Duration     `yaml:"timeout" json:"timeout"`
+    DataSize    int               `yaml:"data_size" json:"data_size"`
+    Iterations  int               `yaml:"iterations" json:"iterations"`
+    Parameters  map[string]string `yaml:"parameters" json:"parameters"`
+    Obfs4Config *Obfs4Config      `yaml:"obfs4_config,omitempty" json:"obfs4_config,omitempty"`
+    V2RayConfig *V2RayConfig      `yaml:"v2ray_config,omitempty" json:"v2ray_config,omitempty"`
+    QUICConfig  *QUICConfig       `yaml:"quic_config,omitempty" json:"quic_config,omitempty"`
+    LogConfig   *LogConfig        `yaml:"log_config,omitempty" json:"log_config,omitempty"`
 }
 
 // Protocol configurations
@@ -153,24 +152,22 @@ func GetDefaultConfig(protocol string) *TestConfig {
     switch protocol {
     case "obfs4":
         return &TestConfig{
-            Protocol:      "obfs4",
-            Timeout:       10 * time.Second,
-            DataSize:      1024,
-            Iterations:    1,
-            PacketCapture: false,
-            Parameters:    make(map[string]string),
-            Obfs4Config:   &Obfs4Config{IATMode: 0},
-            LogConfig:     getDefaultLogConfig(),
+            Protocol:    "obfs4",
+            Timeout:     10 * time.Second,
+            DataSize:    1024,
+            Iterations:  1,
+            Parameters:  make(map[string]string),
+            Obfs4Config: &Obfs4Config{IATMode: 0},
+            LogConfig:   getDefaultLogConfig(),
         }
         
     case "vless":
         return &TestConfig{
-            Protocol:      "v2ray-vless",
-            Timeout:       15 * time.Second,
-            DataSize:      1024,
-            Iterations:    1,
-            PacketCapture: false,
-            Parameters:    make(map[string]string),
+            Protocol:    "v2ray-vless",
+            Timeout:     15 * time.Second,
+            DataSize:    1024,
+            Iterations:  1,
+            Parameters:  make(map[string]string),
             V2RayConfig: &V2RayConfig{
                 Protocol:    "vless",
                 Port:        8081,
@@ -185,12 +182,11 @@ func GetDefaultConfig(protocol string) *TestConfig {
         
     case "vmess":
         return &TestConfig{
-            Protocol:      "v2ray-vmess",
-            Timeout:       15 * time.Second,
-            DataSize:      1024,
-            Iterations:    1,
-            PacketCapture: false,
-            Parameters:    make(map[string]string),
+            Protocol:    "v2ray-vmess",
+            Timeout:     15 * time.Second,
+            DataSize:    1024,
+            Iterations:  1,
+            Parameters:  make(map[string]string),
             V2RayConfig: &V2RayConfig{
                 Protocol:   "vmess",
                 Port:       8082,
@@ -205,12 +201,11 @@ func GetDefaultConfig(protocol string) *TestConfig {
         
     case "xtls":
         return &TestConfig{
-            Protocol:      "v2ray-xtls",
-            Timeout:       20 * time.Second,
-            DataSize:      1024,
-            Iterations:    1,
-            PacketCapture: false,
-            Parameters:    make(map[string]string),
+            Protocol:    "v2ray-xtls",
+            Timeout:     20 * time.Second,
+            DataSize:    1024,
+            Iterations:  1,
+            Parameters:  make(map[string]string),
             V2RayConfig: &V2RayConfig{
                 Protocol:   "xtls",
                 Port:       8083,
@@ -226,12 +221,11 @@ func GetDefaultConfig(protocol string) *TestConfig {
         
     case "shadowsocks":
         return &TestConfig{
-            Protocol:      "v2ray-shadowsocks",
-            Timeout:       15 * time.Second,
-            DataSize:      1024,
-            Iterations:    1,
-            PacketCapture: false,
-            Parameters:    make(map[string]string),
+            Protocol:    "v2ray-shadowsocks",
+            Timeout:     15 * time.Second,
+            DataSize:    1024,
+            Iterations:  1,
+            Parameters:  make(map[string]string),
             V2RayConfig: &V2RayConfig{
                 Protocol: "shadowsocks",
                 Port:     8084,
@@ -245,12 +239,11 @@ func GetDefaultConfig(protocol string) *TestConfig {
         
     case "quic":
         return &TestConfig{
-            Protocol:      "quic",
-            Timeout:       15 * time.Second,
-            DataSize:      1024,
-            Iterations:    1,
-            PacketCapture: false,
-            Parameters:    make(map[string]string),
+            Protocol:   "quic",
+            Timeout:    15 * time.Second,
+            DataSize:   1024,
+            Iterations: 1,
+            Parameters: make(map[string]string),
             QUICConfig: &QUICConfig{
                 MaxIdleTimeout:                30 * time.Second,
                 MaxIncomingStreams:            100,
@@ -277,12 +270,11 @@ func GetDefaultConfig(protocol string) *TestConfig {
 // Helper functions to create configs from credentials
 func createObfs4Config(cred ProtocolCredential, host string) (*TestConfig, error) {
     return &TestConfig{
-        Protocol:      "obfs4",
-        Timeout:       10 * time.Second,
-        DataSize:      1024,
-        Iterations:    1,
-        PacketCapture: false,
-        Parameters:    make(map[string]string),
+        Protocol:    "obfs4",
+        Timeout:     10 * time.Second,
+        DataSize:    1024,
+        Iterations:  1,
+        Parameters:  make(map[string]string),
         Obfs4Config: &Obfs4Config{
             Certificate: cred.Credentials["certificate"],
             IATMode:     0,
@@ -293,12 +285,11 @@ func createObfs4Config(cred ProtocolCredential, host string) (*TestConfig, error
 
 func createVLESSConfig(cred ProtocolCredential, host string) (*TestConfig, error) {
     return &TestConfig{
-        Protocol:      "v2ray-vless",
-        Timeout:       15 * time.Second,
-        DataSize:      1024,
-        Iterations:    1,
-        PacketCapture: false,
-        Parameters:    make(map[string]string),
+        Protocol:   "v2ray-vless",
+        Timeout:    15 * time.Second,
+        DataSize:   1024,
+        Iterations: 1,
+        Parameters: make(map[string]string),
         V2RayConfig: &V2RayConfig{
             Protocol:    "vless",
             UUID:        cred.Credentials["uuid"],
@@ -315,12 +306,11 @@ func createVLESSConfig(cred ProtocolCredential, host string) (*TestConfig, error
 
 func createVMESSConfig(cred ProtocolCredential, host string) (*TestConfig, error) {
     return &TestConfig{
-        Protocol:      "v2ray-vmess",
-        Timeout:       15 * time.Second,
-        DataSize:      1024,
-        Iterations:    1,
-        PacketCapture: false,
-        Parameters:    make(map[string]string),
+        Protocol:   "v2ray-vmess",
+        Timeout:    15 * time.Second,
+        DataSize:   1024,
+        Iterations: 1,
+        Parameters: make(map[string]string),
         V2RayConfig: &V2RayConfig{
             Protocol:    "vmess",
             UUID:        cred.Credentials["uuid"],
@@ -339,12 +329,11 @@ func createVMESSConfig(cred ProtocolCredential, host string) (*TestConfig, error
 
 func createXTLSConfig(cred ProtocolCredential, host string) (*TestConfig, error) {
     return &TestConfig{
-        Protocol:      "v2ray-xtls",
-        Timeout:       20 * time.Second,
-        DataSize:      1024,
-        Iterations:    1,
-        PacketCapture: false,
-        Parameters:    make(map[string]string),
+        Protocol:   "v2ray-xtls",
+        Timeout:    20 * time.Second,
+        DataSize:   1024,
+        Iterations: 1,
+        Parameters: make(map[string]string),
         V2RayConfig: &V2RayConfig{
             Protocol:   "xtls",
             UUID:       cred.Credentials["uuid"],
@@ -362,12 +351,11 @@ func createXTLSConfig(cred ProtocolCredential, host string) (*TestConfig, error)
 
 func createShadowsocksConfig(cred ProtocolCredential, host string) (*TestConfig, error) {
     return &TestConfig{
-        Protocol:      "v2ray-shadowsocks",
-        Timeout:       15 * time.Second,
-        DataSize:      1024,
-        Iterations:    1,
-        PacketCapture: false,
-        Parameters:    make(map[string]string),
+        Protocol:   "v2ray-shadowsocks",
+        Timeout:    15 * time.Second,
+        DataSize:   1024,
+        Iterations: 1,
+        Parameters: make(map[string]string),
         V2RayConfig: &V2RayConfig{
             Protocol: "shadowsocks",
             Port:     cred.Port,
@@ -382,12 +370,11 @@ func createShadowsocksConfig(cred ProtocolCredential, host string) (*TestConfig,
 
 func createQUICConfig(cred ProtocolCredential, host string) (*TestConfig, error) {
     return &TestConfig{
-        Protocol:      "quic",
-        Timeout:       15 * time.Second,
-        DataSize:      1024,
-        Iterations:    1,
-        PacketCapture: false,
-        Parameters:    make(map[string]string),
+        Protocol:   "quic",
+        Timeout:    15 * time.Second,
+        DataSize:   1024,
+        Iterations: 1,
+        Parameters: make(map[string]string),
         QUICConfig: &QUICConfig{
             MaxIdleTimeout:                30 * time.Second,
             MaxIncomingStreams:            100,
@@ -440,4 +427,3 @@ func GenerateTestData(size int, header string) []byte {
     
     return data
 }
-

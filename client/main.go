@@ -31,9 +31,8 @@ func main() {
     list := flag.Bool("list", false, "List all supported protocols")
     generate := flag.String("generate", "", "Generate default config")
     verbose := flag.Bool("verbose", true, "Enable verbose output")
-    pcap := flag.Bool("pcap", false, "Enable packet capture")
     flag.Parse()
-
+    basePort
     fmt.Printf("=== Censorship Measurement Client ===\n")
 
     if *list {
@@ -60,13 +59,13 @@ func main() {
         if err != nil {
             log.Fatalf("Failed to load credentials: %v", err)
         }
-        fmt.Printf("✓ Loaded server credentials from %s\n", *credentials)
+        fmt.Printf("v Loaded server credentials from %s\n", *credentials)
         fmt.Printf("  Generated: %s\n", serverCreds.Timestamp.Format("2006-01-02 15:04:05"))
         fmt.Printf("  Server: %s:%d\n\n", serverCreds.Host, serverCreds.BasePort)
     }
 
     if *testAll {
-        if err := testAllProtocols(*host, *basePort, serverCreds, *verbose, *pcap); err != nil {
+        if err := testAllProtocols(*host, *basePort, serverCreds, *verbose); err != nil {
             log.Fatalf("Failed to test all protocols: %v", err)
         }
         return
@@ -81,15 +80,14 @@ func main() {
         os.Exit(1)
     }
 
-    if err := runSingleTest(*addr, *protocol, *config, serverCreds, *verbose, *pcap); err != nil {
+    if err := runSingleTest(*addr, *protocol, *config, serverCreds, *verbose); err != nil {
         log.Fatalf("Client error: %v", err)
     }
 }
 
 // Test all protocols
-func testAllProtocols(host string, basePort int, creds *ServerCredentials, verbose, enablePcap bool) error {
+func testAllProtocols(host string, basePort int, creds *ServerCredentials, verbose bool) error {
     fmt.Printf("Testing all protocols against %s (base port: %d)\n", host, basePort)
-    fmt.Printf("Packet capture enabled: %t\n", enablePcap)
     fmt.Printf("%s\n", strings.Repeat("=", 60))
 
     results := make(map[string]TestResult)
@@ -100,7 +98,7 @@ func testAllProtocols(host string, basePort int, creds *ServerCredentials, verbo
         
         fmt.Printf("Testing %s on %s...\n", protocol, addr)
         
-        result := runSingleTestInternal(addr, protocol, "", creds, host, verbose, enablePcap)
+        result := runSingleTestInternal(addr, protocol, "", creds, host, verbose)
         results[protocol] = result
         
         if result.Success {
@@ -117,9 +115,9 @@ func testAllProtocols(host string, basePort int, creds *ServerCredentials, verbo
 }
 
 // Run single test
-func runSingleTest(addr, protocol, configFile string, creds *ServerCredentials, verbose, enablePcap bool) error {
+func runSingleTest(addr, protocol, configFile string, creds *ServerCredentials, verbose bool) error {
     host := extractHost(addr)
-    result := runSingleTestInternal(addr, protocol, configFile, creds, host, verbose, enablePcap)
+    result := runSingleTestInternal(addr, protocol, configFile, creds, host, verbose)
     
     // TODO -> Put in log file
     fmt.Printf("\n=== Test Summary ===\n")
@@ -142,7 +140,7 @@ func runSingleTest(addr, protocol, configFile string, creds *ServerCredentials, 
 }
 
 // Internal test runner
-func runSingleTestInternal(addr, protocol, configFile string, creds *ServerCredentials, targetHost string, verbose, enablePcap bool) TestResult {
+func runSingleTestInternal(addr, protocol, configFile string, creds *ServerCredentials, targetHost string, verbose bool) TestResult {
     startTime := time.Now()
     
     // Get configuration
@@ -180,11 +178,8 @@ func runSingleTestInternal(addr, protocol, configFile string, creds *ServerCrede
         }
     }
     
-    // Enable packet capture if requested
-    config.PacketCapture = enablePcap
-    
     // Initialize logging
-    if err := InitLogging(protocol, true, verbose, enablePcap, addr); err != nil {
+    if err := InitLogging(protocol, true, verbose); err != nil {
         return TestResult{
             Protocol: protocol,
             Target:   addr,
@@ -280,7 +275,6 @@ func listProtocols() {
     fmt.Printf("\nExample usage:\n")
     fmt.Printf("  Single test: ./client -protocol=quic -addr=127.0.0.1:8085\n")
     fmt.Printf("  Test all:    ./client -test-all -host=127.0.0.1 -port=8080\n")
-    fmt.Printf("  With pcap:   ./client -protocol=obfs4 -addr=127.0.0.1:8080 -pcap\n")
     fmt.Printf("  Generate:    ./client -generate=quic-config.yaml -protocol=quic\n")
 }
 
@@ -313,7 +307,6 @@ func buildConfigMap(protocol string, config *TestConfig) map[string]interface{} 
     configMap := map[string]interface{}{
         "timeout":        config.Timeout,
         "data_size":      config.DataSize,
-        "packet_capture": config.PacketCapture,
     }
     
     switch protocol {

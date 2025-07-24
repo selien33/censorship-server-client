@@ -205,14 +205,14 @@ func printServerStatus(servers []*ProtocolServer, host string, basePort int) {
     for _, server := range servers {
         if server.Status == "running" {
             runningCount++
-            fmt.Printf("✓ %-15s: %s:%d [%s]\n", server.Protocol, host, server.Port, server.Status)
+            fmt.Printf("v %-15s: %s:%d [%s]\n", server.Protocol, host, server.Port, server.Status)
             
             // Display client config
             if serverCredentials != nil {
                 DisplayClientConfig(server.Protocol, serverCredentials)
             }
         } else {
-            fmt.Printf("✗ %-15s: %s:%d [%s]", server.Protocol, host, server.Port, server.Status)
+            fmt.Printf("x %-15s: %s:%d [%s]", server.Protocol, host, server.Port, server.Status)
             if server.Error != nil {
                 fmt.Printf(" - %v", server.Error)
             }
